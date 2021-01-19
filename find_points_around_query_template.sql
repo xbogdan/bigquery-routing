@@ -32,7 +32,7 @@ AS """
   const hull = pathFinder.getIsoDistanceConcaveHull(start, max_cost);
   
   try {
-    return hull;
+    return JSON.stringify(hull);
   } catch (e) {
     return(null);
   }
@@ -40,6 +40,44 @@ AS """
 
 -- get the convex hull
 CREATE OR REPLACE FUNCTION `$PROJECT_ID.$DATASET.get_isodistance_convex_hull_from_geojson`(geojson STRING, startx FLOAT64, starty FLOAT64, max_cost FLOAT64) 
+RETURNS STRING LANGUAGE js
+OPTIONS (
+  library=["$BUCKET_FILE_PATH"]
+)
+AS """
+  const start = {type: "Feature", geometry: { coordinates: [startx, starty], type: "Point" }};
+  const pathFinder = new geojsonPathFinder(JSON.parse(geojson));
+
+  const hull = pathFinder.getIsoDistanceConvexHull(start, max_cost);
+  
+  try {
+    return hull;
+  } catch (e) {
+    return(null);
+  }
+""";
+
+-- get isochrone the concave hull
+CREATE OR REPLACE FUNCTION `$PROJECT_ID.$DATASET.get_isochrone_concave_hull_from_geojson`(geojson STRING, startx FLOAT64, starty FLOAT64, max_cost FLOAT64) 
+RETURNS STRING LANGUAGE js
+OPTIONS (
+  library=["$BUCKET_FILE_PATH"]
+)
+AS """
+  const start = {type: "Feature", geometry: { coordinates: [startx, starty], type: "Point" }};
+  const pathFinder = new geojsonPathFinder(JSON.parse(geojson));
+
+  const hull = pathFinder.getIsoDistanceConcaveHull(start, max_cost);
+  
+  try {
+    return hull;
+  } catch (e) {
+    return(null);
+  }
+""";
+
+-- get isochrone the convex hull
+CREATE OR REPLACE FUNCTION `$PROJECT_ID.$DATASET.get_isochrone_convex_hull_from_geojson`(geojson STRING, startx FLOAT64, starty FLOAT64, max_cost FLOAT64) 
 RETURNS STRING LANGUAGE js
 OPTIONS (
   library=["$BUCKET_FILE_PATH"]
