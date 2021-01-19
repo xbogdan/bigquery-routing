@@ -5,7 +5,7 @@ OPTIONS (
 )
 AS """
   const start = {type: "Feature", geometry: { coordinates: [startx, starty], type: "Point" }};
-  const pathFinder = new geojsonPathFinder(JSON.parse(geojson));
+  const pathFinder = new geojsonPathFinder.PathFinder(JSON.parse(geojson));
 
   const nodes = pathFinder.findPointsAround(start, max_cost);
   try {
@@ -27,7 +27,7 @@ OPTIONS (
 )
 AS """
   const start = {type: "Feature", geometry: { coordinates: [startx, starty], type: "Point" }};
-  const pathFinder = new geojsonPathFinder(JSON.parse(geojson));
+  const pathFinder = new geojsonPathFinder.PathFinder(JSON.parse(geojson));
 
   const hull = pathFinder.getIsoDistanceConcaveHull(start, max_cost);
   
@@ -46,7 +46,7 @@ AS """
 -- )
 -- AS """
 --   const start = {type: "Feature", geometry: { coordinates: [startx, starty], type: "Point" }};
---   const pathFinder = new geojsonPathFinder(JSON.parse(geojson));
+--   const pathFinder = new geojsonPathFinder.PathFinder(JSON.parse(geojson));
 
 --   const hull = pathFinder.getIsoDistanceConvexHull(start, max_cost);
   
@@ -64,57 +64,8 @@ OPTIONS (
   library=["$BUCKET_FILE_PATH"]
 )
 AS """
-  const highwaySpeeds = {
-    motorway: 110,
-    trunk: 90,
-    primary: 80,
-    secondary: 70,
-    tertiary: 50,
-    unclassified: 50,
-    road: 50,
-    residential: 30,
-    service: 30,
-    living_street: 20
-  };
-
-  const unknowns = {};
-
-  function weightFn(a, b, props) {
-      let d = distance(point(a), point(b)) * 1000,
-          factor = 0.9,
-          type = props.highway,
-          forwardSpeed,
-          backwardSpeed;
-
-      if (props.maxspeed) {
-          forwardSpeed = backwardSpeed = Number(props.maxspeed);
-      } else {
-          let linkIndex = type.indexOf('_link');
-
-          if (linkIndex >= 0) {
-              type = type.substring(0, linkIndex);
-              factor *= 0.7;
-          }
-      
-          forwardSpeed = backwardSpeed = highwaySpeeds[type] * factor;
-      
-          if (!forwardSpeed) {
-              unknowns[type] = true;
-          }
-      }
-      
-      if (props.oneway && props.oneway !== 'no' || props.junction && props.junction === 'roundabout') {
-          backwardSpeed = null;
-      }
-
-      return {
-          forward: forwardSpeed && (d / (forwardSpeed / 3.6)),
-          backward: backwardSpeed && (d / (backwardSpeed / 3.6)),
-      };
-  }
-
   const start = {type: "Feature", geometry: { coordinates: [startx, starty], type: "Point" }};
-  const pathFinder = new geojsonPathFinder(JSON.parse(geojson), { weightFn: weightFn });
+  const pathFinder = new geojsonPathFinder.PathFinder(JSON.parse(geojson), { weightFn: geojsonPathFinder.WeightFunctions.travelTimeWeightFn });
 
   const hull = pathFinder.getIsoDistanceConcaveHull(start, max_cost);
   
@@ -133,7 +84,7 @@ AS """
 -- )
 -- AS """
 --   const start = {type: "Feature", geometry: { coordinates: [startx, starty], type: "Point" }};
---   const pathFinder = new geojsonPathFinder(JSON.parse(geojson));
+--   const pathFinder = new geojsonPathFinder.PathFinder(JSON.parse(geojson));
 
 --   const hull = pathFinder.getIsoDistanceConvexHull(start, max_cost);
   
