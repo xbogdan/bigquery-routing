@@ -32,7 +32,7 @@ AS """
   const hull = pathFinder.getIsoDistanceConcaveHull(start, max_cost);
   
   try {
-    return JSON.stringify(hull);
+    return JSON.stringify(hull.geometry);
   } catch (e) {
     return(null);
   }
