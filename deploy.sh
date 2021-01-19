@@ -33,6 +33,8 @@ done
 git clone --quiet https://github.com/xbogdan/geojson-path-finder.git
 cd geojson-path-finder
 
+export NODE_ENV=production
+
 # install packages
 npm install
 
