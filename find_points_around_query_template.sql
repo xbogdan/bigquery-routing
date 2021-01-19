@@ -4,11 +4,10 @@ OPTIONS (
   library=["$BUCKET_FILE_PATH"]
 )
 AS """
-  var start = {type: "Feature", geometry: { coordinates: [startx, starty], type: "Point" }};
-  var maxCost = max_cost;
-  var pathFinder = new geojsonPathFinder(JSON.parse(geojson));
+  const start = {type: "Feature", geometry: { coordinates: [startx, starty], type: "Point" }};
+  const pathFinder = new geojsonPathFinder(JSON.parse(geojson));
 
-  var nodes = pathFinder.findPointsAround(start, maxCost);
+  const nodes = pathFinder.findPointsAround(start, max_cost);
   try {
     return JSON.stringify({
       type: "MultiPoint",
@@ -20,7 +19,46 @@ AS """
   }
 """;
 
-CREATE OR REPLACE FUNCTION `$PROJECT_ID.$DATASET.nearestpoint`(mypoint GEOGRAPHY, mypoints array<GEOGRAPHY>) AS ((
+-- get the concave hull
+CREATE OR REPLACE FUNCTION `$PROJECT_ID.$DATASET.get_isodistance_concave_hull_from_geojson`(geojson STRING, startx FLOAT64, starty FLOAT64, max_cost FLOAT64) 
+RETURNS STRING LANGUAGE js
+OPTIONS (
+  library=["$BUCKET_FILE_PATH"]
+)
+AS """
+  const start = {type: "Feature", geometry: { coordinates: [startx, starty], type: "Point" }};
+  const pathFinder = new geojsonPathFinder(JSON.parse(geojson));
+
+  const hull = pathFinder.getIsoDistanceConcaveHull(start, max_cost);
+  
+  try {
+    return hull;
+  } catch (e) {
+    return(null);
+  }
+""";
+
+-- get the convex hull
+CREATE OR REPLACE FUNCTION `$PROJECT_ID.$DATASET.get_isodistance_convex_hull_from_geojson`(geojson STRING, startx FLOAT64, starty FLOAT64, max_cost FLOAT64) 
+RETURNS STRING LANGUAGE js
+OPTIONS (
+  library=["$BUCKET_FILE_PATH"]
+)
+AS """
+  const start = {type: "Feature", geometry: { coordinates: [startx, starty], type: "Point" }};
+  const pathFinder = new geojsonPathFinder(JSON.parse(geojson));
+
+  const hull = pathFinder.getIsoDistanceConvexHull(start, max_cost);
+  
+  try {
+    return hull;
+  } catch (e) {
+    return(null);
+  }
+""";
+
+-- helper to find the nearest point if the input point is not in the dataset
+CREATE OR REPLACE FUNCTION `$PROJECT_ID.$DATASET.find_nearest_point`(mypoint GEOGRAPHY, mypoints array<GEOGRAPHY>) AS ((
   WITH EXTRACTED_POINTS AS (
     SELECT SAFE.ST_GEOGFROMTEXT(CONCAT('POINT(', point, ')')) mypoints
     FROM unnest(mypoints) geo_object,
@@ -31,11 +69,11 @@ CREATE OR REPLACE FUNCTION `$PROJECT_ID.$DATASET.nearestpoint`(mypoint GEOGRAPHY
   FROM EXTRACTED_POINTS a
 ));
 
--- 
+-- wrapper for GEOGRAPHY to GEOJSON
 CREATE OR REPLACE FUNCTION `$PROJECT_ID.$DATASET.find_points_around`(lines array<GEOGRAPHY>, start GEOGRAPHY, max_cost FLOAT64) AS ((
   WITH SOME_NETWORK AS (
     SELECT concat('{"type": "FeatureCollection", "features": [{"type": "Feature","geometry":', string_agg(ST_ASGEOJSON(line), '},{"type":"Feature","geometry":'), "}]}") geojson,
-    `$PROJECT_ID.$DATASET.nearestpoint`(start, array_agg(line)) start_nearest,
+    `$PROJECT_ID.$DATASET.find_nearest_point`(start, array_agg(line)) start_nearest,
     FROM unnest(lines) line
   ),
   OUTPUT AS (
@@ -46,6 +84,38 @@ CREATE OR REPLACE FUNCTION `$PROJECT_ID.$DATASET.find_points_around`(lines array
   SELECT * FROM OUTPUT
 ));
 
-CREATE OR REPLACE FUNCTION `$PROJECT_ID.$DATASET.get_isodistance_polygon`(lines array<GEOGRAPHY>, start GEOGRAPHY, max_cost FLOAT64) AS ((
-  SELECT ST_CONVEXHULL(ST_GEOGFROMGEOJSON(`$PROJECT_ID.$DATASET.find_points_around`(lines, start, max_cost)))
+-- wrapper for GEOGRAPHY to GEOJSON
+CREATE OR REPLACE FUNCTION `$PROJECT_ID.$DATASET.get_isodistance_concave_hull`(lines array<GEOGRAPHY>, start GEOGRAPHY, max_cost FLOAT64) AS ((
+  WITH SOME_NETWORK AS (
+    SELECT concat('{"type": "FeatureCollection", "features": [{"type": "Feature","geometry":', string_agg(ST_ASGEOJSON(line), '},{"type":"Feature","geometry":'), "}]}") geojson,
+    `$PROJECT_ID.$DATASET.find_nearest_point`(start, array_agg(line)) start_nearest,
+    FROM unnest(lines) line
+  ),
+  OUTPUT AS (
+    SELECT `$PROJECT_ID.$DATASET.get_isodistance_concave_hull_from_geojson`(geojson, ST_X(start_nearest), ST_Y(start_nearest), max_cost) myresult
+    FROM SOME_NETWORK
+  )
+
+  SELECT * FROM OUTPUT
 ));
+
+-- wrapper for GEOGRAPHY to GEOJSON
+CREATE OR REPLACE FUNCTION `$PROJECT_ID.$DATASET.get_isodistance_convex_hull`(lines array<GEOGRAPHY>, start GEOGRAPHY, max_cost FLOAT64) AS ((
+  WITH SOME_NETWORK AS (
+    SELECT concat('{"type": "FeatureCollection", "features": [{"type": "Feature","geometry":', string_agg(ST_ASGEOJSON(line), '},{"type":"Feature","geometry":'), "}]}") geojson,
+    `$PROJECT_ID.$DATASET.find_nearest_point`(start, array_agg(line)) start_nearest,
+    FROM unnest(lines) line
+  ),
+  OUTPUT AS (
+    SELECT `$PROJECT_ID.$DATASET.get_isodistance_convex_hull_from_geojson`(geojson, ST_X(start_nearest), ST_Y(start_nearest), max_cost) myresult
+    FROM SOME_NETWORK
+  )
+
+  SELECT * FROM OUTPUT
+));
+
+-- old convex hull using SQL
+-- CREATE OR REPLACE FUNCTION `$PROJECT_ID.$DATASET.get_isodistance_convex_hull`(lines array<GEOGRAPHY>, start GEOGRAPHY, max_cost FLOAT64) AS ((
+--   SELECT ST_CONVEXHULL(ST_GEOGFROMGEOJSON(`$PROJECT_ID.$DATASET.find_points_around`(lines, start, max_cost)))
+-- ));
+

@@ -1,0 +1,105 @@
+CREATE OR REPLACE FUNCTION `data-science-229608.routing_us.find_points_around_from_geojson`(geojson STRING, startx FLOAT64, starty FLOAT64, max_cost FLOAT64) 
+RETURNS STRING LANGUAGE js
+OPTIONS (
+  library=["gs://bogdan-tools/geojson_path_finder.js"]
+)
+AS """
+  const start = {type: "Feature", geometry: { coordinates: [startx, starty], type: "Point" }};
+  const pathFinder = new geojsonPathFinder(JSON.parse(geojson));
+
+  const nodes = pathFinder.findPointsAround(start, max_cost);
+  try {
+    return JSON.stringify({
+      type: "MultiPoint",
+      coordinates: nodes
+    });
+  }
+  catch (e) {
+    return(null);
+  }
+""";
+
+--
+CREATE OR REPLACE FUNCTION `data-science-229608.routing_us.get_isodistance_concave_hull_from_geojson`(geojson STRING, startx FLOAT64, starty FLOAT64, max_cost FLOAT64) 
+RETURNS STRING LANGUAGE js
+OPTIONS (
+  library=["gs://bogdan-tools/geojson_path_finder.js"]
+)
+AS """
+  const start = {type: "Feature", geometry: { coordinates: [startx, starty], type: "Point" }};
+  const pathFinder = new geojsonPathFinder(JSON.parse(geojson));
+
+  const hull = pathFinder.getIsoDistanceConcaveHull(start, max_cost);
+  
+  try {
+    return hull;
+  } catch (e) {
+    return(null);
+  }
+""";
+
+--
+CREATE OR REPLACE FUNCTION `data-science-229608.routing_us.get_isodistance_convex_hull_from_geojson`(geojson STRING, startx FLOAT64, starty FLOAT64, max_cost FLOAT64) 
+RETURNS STRING LANGUAGE js
+OPTIONS (
+  library=["gs://bogdan-tools/geojson_path_finder.js"]
+)
+AS """
+  const start = {type: "Feature", geometry: { coordinates: [startx, starty], type: "Point" }};
+  const pathFinder = new geojsonPathFinder(JSON.parse(geojson));
+
+  const hull = pathFinder.getIsoDistanceConvexHull(start, max_cost);
+  
+  try {
+    return hull;
+  } catch (e) {
+    return(null);
+  }
+""";
+
+--
+CREATE OR REPLACE FUNCTION `data-science-229608.routing_us.find_nearest_point`(mypoint GEOGRAPHY, mypoints array<GEOGRAPHY>) AS ((
+  WITH EXTRACTED_POINTS AS (
+    SELECT SAFE.ST_GEOGFROMTEXT(CONCAT('POINT(', point, ')')) mypoints
+    FROM unnest(mypoints) geo_object,
+      UNNEST(REGEXP_EXTRACT_ALL(ST_ASTEXT(geo_object), r'[^,\(\)]+')) point WITH OFFSET pos
+    WHERE pos BETWEEN 1 AND ST_NUMPOINTS(geo_object)
+  )
+  SELECT ARRAY_AGG(a.mypoints ORDER BY ST_Distance(a.mypoints, mypoint) LIMIT 1)[ORDINAL(1)] as neighbor_id
+  FROM EXTRACTED_POINTS a
+));
+
+--
+CREATE OR REPLACE FUNCTION `data-science-229608.routing_us.find_points_around`(lines array<GEOGRAPHY>, start GEOGRAPHY, max_cost FLOAT64) AS ((
+  WITH SOME_NETWORK AS (
+    SELECT concat('{"type": "FeatureCollection", "features": [{"type": "Feature","geometry":', string_agg(ST_ASGEOJSON(line), '},{"type":"Feature","geometry":'), "}]}") geojson,
+    `data-science-229608.routing_us.find_nearest_point`(start, array_agg(line)) start_nearest,
+    FROM unnest(lines) line
+  ),
+  OUTPUT AS (
+    SELECT `data-science-229608.routing_us.find_points_around_from_geojson`(geojson, ST_X(start_nearest), ST_Y(start_nearest), max_cost) myresult
+    FROM SOME_NETWORK
+  )
+
+  SELECT * FROM OUTPUT
+));
+
+--
+CREATE OR REPLACE FUNCTION `data-science-229608.routing_us.get_isodistance_convex_hull`(lines array<GEOGRAPHY>, start GEOGRAPHY, max_cost FLOAT64) AS ((
+  SELECT ST_CONVEXHULL(ST_GEOGFROMGEOJSON(`data-science-229608.routing_us.find_points_around`(lines, start, max_cost)))
+));
+
+-- 
+CREATE OR REPLACE FUNCTION `data-science-229608.routing_us.get_isodistance_concave_hull`(lines array<GEOGRAPHY>, start GEOGRAPHY, max_cost FLOAT64) AS ((
+  WITH SOME_NETWORK AS (
+    SELECT concat('{"type": "FeatureCollection", "features": [{"type": "Feature","geometry":', string_agg(ST_ASGEOJSON(line), '},{"type":"Feature","geometry":'), "}]}") geojson,
+    `data-science-229608.routing_us.find_nearest_point`(start, array_agg(line)) start_nearest,
+    FROM unnest(lines) line
+  ),
+  OUTPUT AS (
+    SELECT `data-science-229608.routing_us.get_isodistance_concave_hull_from_geojson`(geojson, ST_X(start_nearest), ST_Y(start_nearest), max_cost) myresult
+    FROM SOME_NETWORK
+  )
+
+  SELECT * FROM OUTPUT
+));
