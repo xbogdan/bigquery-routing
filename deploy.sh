@@ -32,7 +32,6 @@ done
 # clone repo
 git clone --quiet https://github.com/xbogdan/geojson-path-finder.git
 cd geojson-path-finder
-git checkout feature/find-points-around
 
 # install packages
 npm install
@@ -49,9 +48,6 @@ cd ..
 
 # clone big query routing
 git clone --quiet https://github.com/xbogdan/bigquery-routing.git
-cd bigquery-routing
-git checkout feature/find-points-around
-cd ..
 
 # format query file
 export DATASET="$dataset"
