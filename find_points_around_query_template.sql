@@ -141,9 +141,9 @@ CREATE OR REPLACE FUNCTION `$PROJECT_ID.$DATASET.get_isodistance_concave_hull`(l
 -- wrapper for GEOGRAPHY to GEOJSON
 CREATE OR REPLACE FUNCTION `$PROJECT_ID.$DATASET.get_isochrone_concave_hull`(lines array<GEOGRAPHY>, start GEOGRAPHY, max_cost FLOAT64) AS ((
   WITH SOME_NETWORK AS (
-    SELECT concat('{"type": "FeatureCollection", "features": [{"type": "Feature","geometry":', string_agg(ST_ASGEOJSON(line), '},{"type":"Feature","geometry":'), "}]}") geojson,
+    SELECT CONCAT('{"type": "FeatureCollection", "features": [{"type": "Feature", "geometry":', string_agg(ST_ASGEOJSON(line), '}, {"type":"Feature","geometry":'), "}]}") geojson,
     `$PROJECT_ID.$DATASET.find_nearest_point`(start, array_agg(line)) start_nearest,
-    FROM unnest(lines) line
+    FROM UNNEST(lines) line
   ),
   OUTPUT AS (
     SELECT `$PROJECT_ID.$DATASET.get_isochrone_concave_hull_from_geojson`(geojson, ST_X(start_nearest), ST_Y(start_nearest), max_cost) myresult
