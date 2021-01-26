@@ -7,16 +7,14 @@ AS """
   const start = {type: "Feature", geometry: { coordinates: [startx, starty], type: "Point" }};
   const pathFinder = new geojsonPathFinder.PathFinder(JSON.parse(geojson));
 
-  const nodes = pathFinder.findPointsAround(start, max_cost);
-  try {
-    return JSON.stringify({
+  return new Promise((resolve, reject) => {
+    const nodes = pathFinder.findPointsAround(start, max_cost);
+    const nodesJson = JSON.stringify({
       type: "MultiPoint",
       coordinates: nodes
     });
-  }
-  catch (e) {
-    return(null);
-  }
+    resolve(nodesJson);
+  });
 """;
 
 -- get the concave hull
