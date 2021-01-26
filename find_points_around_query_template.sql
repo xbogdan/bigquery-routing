@@ -27,13 +27,11 @@ AS """
   const start = {type: "Feature", geometry: { coordinates: [startx, starty], type: "Point" }};
   const pathFinder = new geojsonPathFinder.PathFinder(JSON.parse(geojson));
 
-  const hull = pathFinder.getIsoDistanceConcaveHull(start, max_cost);
-  
-  try {
-    return JSON.stringify(hull.geometry);
-  } catch (e) {
-    return(null);
-  }
+  return new Promise((resolve, reject) => {
+    const hull = pathFinder.getIsoDistanceConcaveHull(start, max_cost);
+    const geometry = JSON.stringify(hull.geometry);
+    resolve(geometry);
+  });
 """;
 
 -- get the convex hull
